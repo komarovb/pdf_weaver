@@ -134,8 +134,15 @@ module PDFWeaver
                 stretchy false
                 
                 on_clicked do
-                  file = open_folder
-                  puts file unless file.nil?
+                  selected_folder = open_folder
+                  puts "Selected folder: #{selected_folder}"
+                  unless selected_folder.nil?
+                    if(Dir.exist?(selected_folder))
+                      Dir.glob("#{selected_folder}/*.pdf").each do |filepath|
+                        @weaver_files << WeaverFile.new(true, File.basename(filepath), File.dirname(filepath))
+                      end
+                    end
+                  end
                   $stdout.flush # for Windows
                 end
               }
