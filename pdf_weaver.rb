@@ -11,7 +11,7 @@ module PDFWeaver
     def parse_arguments(arguments)
       parsed_args = {output_file: "./output.pdf", input_files: []}
       if arguments.length < 3
-        raise "At least 2 input files are needed for the program to run. Eg: ruby pdf_weave.rb -i <input_file_1> -i <input_file_2>."
+        raise "At least 2 input files are needed for the program to run in command line mode. Eg: ruby pdf_weave.rb -i <input_file_1> -i <input_file_2>."
       end
 
       for i in 0..arguments.length
@@ -70,7 +70,7 @@ module PDFWeaver
     attr_accessor :weaver_files
 
     def initialize
-      @arguments = {output_file: "./output.pdf", input_files: []}
+      @arguments = {output_file: "./testfiles/output.pdf", input_files: []}
       @running = false
       @worker = nil
       @file_selection_element = nil
@@ -123,7 +123,7 @@ module PDFWeaver
                   unless file.nil?
                     puts "Selected #{file}"
                     if File.exist?(file)
-                      @weaver_files << WeaverFile.new(true, File.basename(file), File.dirname(file))
+                      @weaver_files << WeaverFile.new(true, File.basename(file), file)
                     end
                   end
                   $stdout.flush # for Windows
@@ -139,7 +139,7 @@ module PDFWeaver
                   unless selected_folder.nil?
                     if(Dir.exist?(selected_folder))
                       Dir.glob("#{selected_folder}/*.pdf").each do |filepath|
-                        @weaver_files << WeaverFile.new(true, File.basename(filepath), File.dirname(filepath))
+                        @weaver_files << WeaverFile.new(true, File.basename(filepath), filepath)
                       end
                     end
                   end
@@ -165,11 +165,42 @@ module PDFWeaver
                   $stdout.flush # for Windows
                 end
               }
-              button("Merge selected files") {
+              @merge_button = button("Merge selected files") {
                 stretchy false
                 
                 on_clicked do
-                  puts "Merging!"
+                  if not @running
+                    @running = true
+                    @merge_button.enabled = false
+                    @merge_button.text = "Merging..."
+                    @inner_thread = Thread.new do
+                      
+                      puts "Loading and Merging PDF files"
+                      missing_files = []
+                      pdf = CombinePDF.new
+                      @weaver_files.select(&:selected).each do |weaver_file|
+                        if File.exist?(weaver_file.filepath)
+                          puts "Merging #{weaver_file.filepath}"
+                          pdf << CombinePDF.load(weaver_file.filepath)
+                        else
+                          missing_files << weaver_file.filepath
+                        end
+                      end
+
+                      puts "Saving the result into #{@arguments[:output_file]}"
+                      pdf.save @arguments[:output_file]
+
+                      if missing_files.length > 0
+                        puts "Found #{missing_files.length} missing files"
+                        Glimmer::LibUI.queue_main do
+                          msg_box("Found #{missing_files.length} missing files!", "#{missing_files.join('\n')}")
+                        end
+                      end
+                      @running = false
+                    end
+                    @merge_button.enabled = true
+                    @merge_button.text = "Merge selected files"
+                  end
                 end
               }      
             }
@@ -182,10 +213,14 @@ end
 
 if __FILE__ == $0
   begin
-    # cli_interface = PDFWeaver::WeaverCLI.new(ARGV)
-    # status = cli_interface.do_work
-    # exit(status)
-    PDFWeaver::WeaverGUI.new.launch
+    puts "Number of arguments: #{ARGV.length}, #{ARGV[1]}"
+    if ARGV.length > 0 && ARGV[0] == "-cli"
+      cli_interface = PDFWeaver::WeaverCLI.new(ARGV)
+      status = cli_interface.do_work
+      exit(status)
+    else
+      PDFWeaver::WeaverGUI.new.launch
+    end
   rescue => ex
     puts "Failing with an exception! #{ex.message}"
     exit(1)
