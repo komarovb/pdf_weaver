@@ -60,30 +60,35 @@ module PDFWeaver
   class WeaverGUI
     include Glimmer
   
-    BasicWeaverFile = Struct.new(:selected, :filename, :filepath)
-    class WeaverFile < BasicWeaverFile
+    WeaverFile = Struct.new(:selected, :filename, :filepath) do
       def action
         'Remove'
+      end
+
+      def up
+        'Up'
+      end
+
+      def down
+        'Down'
       end
     end
 
     attr_accessor :weaver_files
 
     def initialize
-      @arguments = {output_file: "./testfiles/output.pdf", input_files: []}
+      @arguments = {output_file: "./output.pdf"}
       @running = false
       @worker = nil
       @file_selection_element = nil
-      @weaver_files = [
-        WeaverFile.new(true, "file1.pdf", "/home/borys/file1.pdf")
-      ]
+      @weaver_files = []
       @instructions_header = %{How to use PDF Weaver\n\n}
       @instructions = %{Use the following instructions to merge multiple PDF files\n
-1. Click the "Select files" button on the right side\n   
-2. Pick files that you would like to merge\n
-3. Confirm your choice and / or add more files int the next step\n
-4. Click Merge to merge or Cancel to clear the list of files\n
-5. Find merged file in the specified output directory\n}
+1. Use "Select file" and "Select folder" buttons to pick pdf/image files\n   
+2. The selected files will appear in the table below\n
+3. Rearrange the files using the "Up" and "Down" buttons\n
+4. Click the Merge button\n
+5. The resulting document can be found under the output path\n}
     end
   
     def launch
@@ -92,30 +97,42 @@ module PDFWeaver
     end
   
     def create_gui
-      @main_window = window('PDF Weaver', 600, 500, true) {
+      @main_window = window('PDF Weaver', 600, 600, true) {
         margined true
   
         vertical_box {
           horizontal_box {
-            # Instructions text
-            area {
-              stretchy true
-              text {
-                align :center
-                default_font family: 'Courier New', size: 14, weight: :regular, stretch: :normal
-                string {
-                  font family: 'Courier New', size: 22, weight: :bold, stretch: :normal
-                  @instructions_header
+            vertical_box {
+              # Instructions text
+              area {
+                stretchy true
+                text {
+                  align :center
+                  default_font family: 'Courier New', size: 14, weight: :regular, stretch: :normal
+                  string {
+                    font family: 'Courier New', size: 22, weight: :bold, stretch: :normal
+                    @instructions_header
+                  }
+                  string {
+                    @instructions
+                  }
                 }
-                string {
-                  @instructions
-                }
+              }
+              @entry = entry {
+                stretchy false
+                text @arguments[:output_file]
+                
+                on_changed do
+                  if !@entry.text.nil?
+                    @arguments[:output_file] = @entry.text
+                  end
+                end
               }
             }
           }
           horizontal_box {
             vertical_box {
-              button("Select files") {
+              button("Select file") {
                 stretchy false
                 
                 on_clicked do
@@ -154,6 +171,16 @@ module PDFWeaver
                 button_column('Action') {
                   on_clicked do |row_id|
                     @weaver_files.delete_at(row_id)
+                  end
+                }
+                button_column('Up') {
+                  on_clicked do |row_id|
+                    @weaver_files[row_id], @weaver_files[row_id - 1] = @weaver_files[row_id - 1], @weaver_files[row_id]
+                  end
+                }
+                button_column('Down') {
+                  on_clicked do |row_id|
+                    @weaver_files[row_id], @weaver_files[row_id + 1] = @weaver_files[row_id + 1], @weaver_files[row_id]
                   end
                 }
           
@@ -195,6 +222,10 @@ module PDFWeaver
                         Glimmer::LibUI.queue_main do
                           msg_box("Found #{missing_files.length} missing files!", "#{missing_files.join('\n')}")
                         end
+                      end
+
+                      Glimmer::LibUI.queue_main do
+                        msg_box("Merge finished successfully!", "The result was saved to #{@arguments[:output_file]}")
                       end
                       @running = false
                     end
