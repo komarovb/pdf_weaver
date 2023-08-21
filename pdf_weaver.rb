@@ -11,7 +11,7 @@ module PDFWeaver
     def parse_arguments(arguments)
       parsed_args = {output_file: "./output.pdf", input_files: []}
       if arguments.length < 3
-        raise "At least 2 input files are needed for the program to run in command line mode. Eg: ruby pdf_weave.rb -i <input_file_1> -i <input_file_2>."
+        raise "At least 2 input files are needed for the program to run in command line mode. Eg: ruby pdf_weaver.rb -i <input_file_1> -i <input_file_2>."
       end
 
       for i in 0..arguments.length
@@ -249,7 +249,7 @@ end
 if __FILE__ == $0
   begin
     puts "Number of arguments: #{ARGV.length}, #{ARGV[1]}"
-    if ARGV.length > 0 && ARGV[0] == "-cli"
+    if ARGV.length > 0 && (ARGV[0] == "--cli" || ARGV[0] == "-cli")
       cli_interface = PDFWeaver::WeaverCLI.new(ARGV)
       status = cli_interface.do_work
       exit(status)
