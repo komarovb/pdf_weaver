@@ -82,9 +82,9 @@ module PDFWeaver
       @worker = nil
       @file_selection_element = nil
       @weaver_files = []
+
       @instructions_header = %{How to use PDF Weaver\n\n}
-      @instructions = %{Use the following instructions to merge multiple PDF files\n
-1. Use "Select file" and "Select folder" buttons to pick pdf/image files\n   
+      @instructions = %{1. Use "Select file" and "Select folder" buttons to pick pdf/image files\n   
 2. The selected files will appear in the table below\n
 3. Rearrange the files using the "Up" and "Down" buttons\n
 4. Click the Merge button\n
@@ -98,6 +98,10 @@ module PDFWeaver
   
     def create_gui
       @main_window = window('PDF Weaver', 600, 600, true) {
+        on_closing do
+          @worker.exit if !@worker.nil?
+        end
+
         margined true
   
         vertical_box {
@@ -200,7 +204,7 @@ module PDFWeaver
                     @running = true
                     @merge_button.enabled = false
                     @merge_button.text = "Merging..."
-                    @inner_thread = Thread.new do
+                    @worker = Thread.new do
                       
                       puts "Loading and Merging PDF files"
                       missing_files = []
