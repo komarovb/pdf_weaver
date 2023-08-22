@@ -1,7 +1,13 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
 require 'combine_pdf'
 require 'glimmer-dsl-libui'
 
 module PDFWeaver
+
+  VERSION = '0.0.1'
+
   class WeaverCLI
     def initialize(arguments)
       @arguments = parse_arguments(arguments)
@@ -9,7 +15,7 @@ module PDFWeaver
     end
 
     def parse_arguments(arguments)
-      parsed_args = {output_file: "./output.pdf", input_files: []}
+      parsed_args = {output_file: "output.pdf", input_files: []}
       if arguments.length < 3
         raise "At least 2 input files are needed for the program to run in command line mode. Eg: ruby pdf_weaver.rb -i <input_file_1> -i <input_file_2>."
       end
@@ -59,6 +65,8 @@ module PDFWeaver
 
   class WeaverGUI
     include Glimmer
+
+    ACCEPTED_INPUT = [".pdf"]
   
     WeaverFile = Struct.new(:selected, :filename, :filepath) do
       def action
@@ -77,26 +85,39 @@ module PDFWeaver
     attr_accessor :weaver_files
 
     def initialize
-      @arguments = {output_file: "./output.pdf"}
-      @running = false
-      @worker = nil
-      @file_selection_element = nil
+      @output_file = "output.pdf"
       @weaver_files = []
 
+      @running = false
+      @worker = nil
       @instructions_header = %{How to use PDF Weaver\n\n}
-      @instructions = %{1. Use "Select file" and "Select folder" buttons to pick pdf/image files\n   
-2. The selected files will appear in the table below\n
-3. Rearrange the files using the "Up" and "Down" buttons\n
-4. Click the Merge button\n
-5. The resulting document can be found under the output path\n}
+      @instruction_steps = ["Add Files: Click 'Select File' or 'Select Folder' to add PDF/image files.",
+        "Arrange Order: Rearrange files using 'Up' and 'Down' buttons.",
+        "Merge: Hit 'Merge' to combine files into one document.",
+        "Retrieve Result: Find the merged file in the chosen output path"]
     end
   
     def launch
       create_gui
       @main_window.show
     end
+
+    def show_instructions
+      @instruction_steps.each_with_index do |step, index|
+        step_header, step_body = step.split(':')
+        string {
+          font weight: :bold
+          "#{index+1}. #{step_header}:"
+        }
+        string {
+          "#{step_body}\n\n"
+        }
+      end
+    end
+
   
     def create_gui
+      # TODO Add menu items
       @main_window = window('PDF Weaver', 600, 600, true) {
         on_closing do
           @worker.exit if !@worker.nil?
@@ -117,41 +138,42 @@ module PDFWeaver
                     font family: 'Courier New', size: 22, weight: :bold, stretch: :normal
                     @instructions_header
                   }
-                  string {
-                    @instructions
-                  }
+                  show_instructions
                 }
               }
-              @entry = entry {
+              form {
                 stretchy false
-                text @arguments[:output_file]
-                
-                on_changed do
-                  if !@entry.text.nil?
-                    @arguments[:output_file] = @entry.text
+                @entry = entry {
+                  label "Output file path:"
+                  stretchy false
+                  text @output_file
+                  
+                  on_changed do
+                    if !@entry.text.nil?
+                      @output_file = @entry.text
+                    end
                   end
-                end
+                }
               }
-            }
-          }
-          horizontal_box {
-            vertical_box {
-              button("Select file") {
+              
+              button("Select File") {
                 stretchy false
                 
                 on_clicked do
                   file = open_file
                   unless file.nil?
                     puts "Selected #{file}"
-                    if File.exist?(file)
+                    if File.exist?(file) && ACCEPTED_INPUT.include?(File.extname(file))
                       @weaver_files << WeaverFile.new(true, File.basename(file), file)
+                    else
+                      msg_box_error("Unsupported file format!")
                     end
                   end
                   $stdout.flush # for Windows
 
                 end
               }
-              button("Select folder") {
+              button("Select Folder") {
                 stretchy false
                 
                 on_clicked do
@@ -167,6 +189,10 @@ module PDFWeaver
                   $stdout.flush # for Windows
                 end
               }
+            }
+          }
+          horizontal_box {
+            vertical_box {
               table {
                 checkbox_column('Selected') {
                   editable true
@@ -196,7 +222,7 @@ module PDFWeaver
                   $stdout.flush # for Windows
                 end
               }
-              @merge_button = button("Merge selected files") {
+              @merge_button = button("Merge") {
                 stretchy false
                 
                 on_clicked do
@@ -218,23 +244,23 @@ module PDFWeaver
                         end
                       end
 
-                      puts "Saving the result into #{@arguments[:output_file]}"
-                      pdf.save @arguments[:output_file]
+                      puts "Saving the result into #{@output_file}"
+                      pdf.save @output_file
 
                       if missing_files.length > 0
                         puts "Found #{missing_files.length} missing files"
                         Glimmer::LibUI.queue_main do
-                          msg_box("Found #{missing_files.length} missing files!", "#{missing_files.join('\n')}")
+                          msg_box_error("Found #{missing_files.length} missing files!", "#{missing_files.join('\n')}")
                         end
                       end
 
                       Glimmer::LibUI.queue_main do
-                        msg_box("Merge finished successfully!", "The result was saved to #{@arguments[:output_file]}")
+                        msg_box("Merge finished successfully!", "The result was saved to #{@output_file}")
                       end
                       @running = false
                     end
                     @merge_button.enabled = true
-                    @merge_button.text = "Merge selected files"
+                    @merge_button.text = "Merge"
                   end
                 end
               }      
