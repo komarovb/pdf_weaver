@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require 'logger'
 require 'combine_pdf'
 require 'glimmer-dsl-libui'
 
@@ -12,6 +13,7 @@ module PDFWeaver
     def initialize(arguments)
       @arguments = parse_arguments(arguments)
       @weaver = nil
+      @logger = Logger.new($stdout)
     end
 
     def parse_arguments(arguments)
@@ -85,6 +87,7 @@ module PDFWeaver
     attr_accessor :weaver_files
 
     def initialize
+      @logger = Logger.new($stdout)
       @output_file = "output.pdf"
       @weaver_files = []
 
@@ -162,7 +165,7 @@ module PDFWeaver
                 on_clicked do
                   file = open_file
                   unless file.nil?
-                    puts "Selected #{file}"
+                    @logger.info "Selected #{file}"
                     if File.exist?(file) && ACCEPTED_INPUT.include?(File.extname(file))
                       @weaver_files << WeaverFile.new(true, File.basename(file), file)
                     else
@@ -178,7 +181,7 @@ module PDFWeaver
                 
                 on_clicked do
                   selected_folder = open_folder
-                  puts "Selected folder: #{selected_folder}"
+                  @logger.info "Selected folder: #{selected_folder}"
                   unless selected_folder.nil?
                     if(Dir.exist?(selected_folder))
                       Dir.glob("#{selected_folder}/*.pdf").each do |filepath|
@@ -218,7 +221,6 @@ module PDFWeaver
                 cell_rows <=> [self, :weaver_files] # explicit data-binding to self.contacts Model Array, auto-inferring model attribute names from underscored table column names by convention
                 
                 on_changed do |row, type, row_data|
-                  puts "Row #{row} #{type}: #{row_data}"
                   $stdout.flush # for Windows
                 end
               }
@@ -232,23 +234,23 @@ module PDFWeaver
                     @merge_button.text = "Merging..."
                     @worker = Thread.new do
                       
-                      puts "Loading and Merging PDF files"
+                      @logger.info "Loading and Merging PDF files"
                       missing_files = []
                       pdf = CombinePDF.new
                       @weaver_files.select(&:selected).each do |weaver_file|
                         if File.exist?(weaver_file.filepath)
-                          puts "Merging #{weaver_file.filepath}"
+                          @logger.info "Merging #{weaver_file.filepath}"
                           pdf << CombinePDF.load(weaver_file.filepath)
                         else
                           missing_files << weaver_file.filepath
                         end
                       end
 
-                      puts "Saving the result into #{@output_file}"
+                      @logger.info "Saving the result into #{@output_file}"
                       pdf.save @output_file
 
                       if missing_files.length > 0
-                        puts "Found #{missing_files.length} missing files"
+                        @logger.info "Found #{missing_files.length} missing files"
                         Glimmer::LibUI.queue_main do
                           msg_box_error("Found #{missing_files.length} missing files!", "#{missing_files.join('\n')}")
                         end
@@ -274,7 +276,6 @@ end
 
 if __FILE__ == $0
   begin
-    puts "Number of arguments: #{ARGV.length}, #{ARGV[1]}"
     if ARGV.length > 0 && (ARGV[0] == "--cli" || ARGV[0] == "-cli")
       cli_interface = PDFWeaver::WeaverCLI.new(ARGV)
       status = cli_interface.do_work
