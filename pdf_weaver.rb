@@ -133,9 +133,9 @@ module PDFWeaver
                 stretchy true
                 text {
                   align :center
-                  default_font family: 'Courier New', size: 14, weight: :regular, stretch: :normal
+                  default_font family: 'Courier New', size: 10, weight: :regular, stretch: :normal
                   string {
-                    font family: 'Courier New', size: 22, weight: :bold, stretch: :normal
+                    font family: 'Courier New', size: 14, weight: :bold, stretch: :normal
                     @instructions_header
                   }
                   show_instructions
@@ -215,7 +215,7 @@ module PDFWeaver
                 }
           
                 editable false
-                cell_rows <=> [self, :weaver_files] # explicit data-binding to self.contacts Model Array, auto-inferring model attribute names from underscored table column names by convention
+                cell_rows <=> [self, :weaver_files] # explicit data-binding to self.weaver_files Model Array, auto-inferring model attribute names from underscored table column names by convention
                 
                 on_changed do |row, type, row_data|
                   puts "Row #{row} #{type}: #{row_data}"
