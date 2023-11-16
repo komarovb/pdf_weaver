@@ -3,17 +3,18 @@
 
 require 'logger'
 require 'combine_pdf'
+require 'prawn'
 require 'glimmer-dsl-libui'
 
 module PDFWeaver
 
-  VERSION = '0.0.1'
+  VERSION = '0.0.2'
 
   class WeaverCLI
     def initialize(arguments)
       @arguments = parse_arguments(arguments)
       @weaver = nil
-      @logger = Logger.new($stdout)
+      @logger = Logger.new($stdout, progname: "CLI")
     end
 
     def parse_arguments(arguments)
@@ -68,28 +69,15 @@ module PDFWeaver
   class WeaverGUI
     include Glimmer
 
-    ACCEPTED_INPUT = [".pdf"]
-  
-    WeaverFile = Struct.new(:selected, :filename, :filepath) do
-      def action
-        'Remove'
-      end
-
-      def up
-        'Up'
-      end
-
-      def down
-        'Down'
-      end
-    end
+    ACCEPTED_INPUT = %w(.pdf .png .jpeg .jpg)
 
     attr_accessor :weaver_files
 
     def initialize
-      @logger = Logger.new($stdout)
+      @logger = Logger.new($stdout, progname: 'GUI')
       @output_file = "output.pdf"
       @weaver_files = []
+      @weaver_engine = WeaverEngine.new
 
       @running = false
       @worker = nil
@@ -97,7 +85,7 @@ module PDFWeaver
       @instruction_steps = ["Add Files: Click 'Select File' or 'Select Folder' to add PDF/image files.",
         "Arrange Order: Rearrange files using 'Up' and 'Down' buttons.",
         "Merge: Hit 'Merge' to combine files into one document.",
-        "Retrieve Result: Find the merged file in the chosen output path"]
+        "Retrieve Result: Find the merged file in the chosen output path."]
     end
   
     def launch
@@ -167,7 +155,8 @@ module PDFWeaver
                   unless file.nil?
                     @logger.info "Selected #{file}"
                     if File.exist?(file) && ACCEPTED_INPUT.include?(File.extname(file))
-                      @weaver_files << WeaverFile.new(true, File.basename(file), file)
+                      
+                      @weaver_files << WeaverEngine::WeaverFile.new(true, File.basename(file), file)
                     else
                       msg_box_error("Unsupported file format!")
                     end
@@ -184,8 +173,9 @@ module PDFWeaver
                   @logger.info "Selected folder: #{selected_folder}"
                   unless selected_folder.nil?
                     if(Dir.exist?(selected_folder))
-                      Dir.glob("#{selected_folder}/*.pdf").each do |filepath|
-                        @weaver_files << WeaverFile.new(true, File.basename(filepath), filepath)
+                      search_pattern = ACCEPTED_INPUT.map{ |str| str.sub('.', '') }.join(',')
+                      Dir.glob("#{selected_folder}/*.{#{search_pattern}}").each do |filepath|
+                        @weaver_files << WeaverEngine::WeaverFile.new(true, File.basename(filepath), filepath)
                       end
                     end
                   end
@@ -228,26 +218,14 @@ module PDFWeaver
                 stretchy false
                 
                 on_clicked do
+                  @logger.info "Merging..."
                   if not @running
                     @running = true
                     @merge_button.enabled = false
                     @merge_button.text = "Merging..."
                     @worker = Thread.new do
                       
-                      @logger.info "Loading and Merging PDF files"
-                      missing_files = []
-                      pdf = CombinePDF.new
-                      @weaver_files.select(&:selected).each do |weaver_file|
-                        if File.exist?(weaver_file.filepath)
-                          @logger.info "Merging #{weaver_file.filepath}"
-                          pdf << CombinePDF.load(weaver_file.filepath)
-                        else
-                          missing_files << weaver_file.filepath
-                        end
-                      end
-
-                      @logger.info "Saving the result into #{@output_file}"
-                      pdf.save @output_file
+                      status, missing_files = @weaver_engine.merge_files(@weaver_files, @output_file)
 
                       if missing_files.length > 0
                         @logger.info "Found #{missing_files.length} missing files"
@@ -256,9 +234,17 @@ module PDFWeaver
                         end
                       end
 
-                      Glimmer::LibUI.queue_main do
-                        msg_box("Merge finished successfully!", "The result was saved to #{@output_file}")
+                      if status != 0
+                        @logger.info "Merge operation failed"
+                        Glimmer::LibUI.queue_main do
+                          msg_box_error("Merge operation failed with status: #{status}")
+                        end
+                      else 
+                        Glimmer::LibUI.queue_main do
+                          msg_box("Merge finished successfully!", "The result was saved to #{@output_file}")
+                        end
                       end
+
                       @running = false
                     end
                     @merge_button.enabled = true
@@ -272,6 +258,55 @@ module PDFWeaver
       }
     end
   end
+end
+
+class WeaverEngine
+
+  WeaverFile = Struct.new(:selected, :filename, :filepath) do
+    def action
+      'Remove'
+    end
+
+    def up
+      'Up'
+    end
+
+    def down
+      'Down'
+    end
+  end
+
+  def initialize
+    @logger = Logger.new($stdout, progname: 'Engine')
+  end
+
+  def merge_files(files_to_merge, output_file)
+    status = 0
+    missing_files = []
+
+    @logger.info "Loading and Merging PDF files"
+    pdf_output = CombinePDF.new
+
+    files_to_merge.select(&:selected).each do |weaver_file|
+      if File.exist?(weaver_file.filepath)
+        @logger.info "Merging #{weaver_file.filepath}"
+        pdf_output << CombinePDF.load(weaver_file.filepath)
+      else
+        missing_files << weaver_file.filepath
+      end
+    end
+
+    @logger.info "Saving the result into #{output_file}"
+    pdf_output.save output_file
+
+    return status, missing_files
+
+    rescue RuntimeError => e
+      @logger.error("Exception occured during merge! #{e.message}")
+      @logger.error("#{e.backtrace}")
+      return 1, []
+  end
+
 end
 
 if __FILE__ == $0

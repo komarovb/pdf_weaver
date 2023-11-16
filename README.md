@@ -22,6 +22,9 @@ Then follow instructions on the screen.
 ### Mac
 ![mac screenshot](screenshots/pdf-weaver-mac.png)
 
+### Linux
+![mac screenshot](screenshots/pdf-weaver-linux.png)
+
 <!-- TODO -->
 <!-- | Windows | Mac | Linux |
 |:---:|:-----:|:-------:|
