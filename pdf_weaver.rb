@@ -10,6 +10,10 @@ module PDFWeaver
 
   VERSION = '0.0.2'
 
+  ACCEPTED_IMAGES = %w(.png .jpeg .jpg)
+  ACCEPTED_FILES = %w(.pdf)
+  ACCEPTED_INPUT = ACCEPTED_FILES + ACCEPTED_IMAGES
+
   class WeaverCLI
     def initialize(arguments)
       @arguments = parse_arguments(arguments)
@@ -68,8 +72,6 @@ module PDFWeaver
 
   class WeaverGUI
     include Glimmer
-
-    ACCEPTED_INPUT = %w(.pdf .png .jpeg .jpg)
 
     attr_accessor :weaver_files
 
@@ -154,8 +156,7 @@ module PDFWeaver
                   file = open_file
                   unless file.nil?
                     @logger.info "Selected #{file}"
-                    if File.exist?(file) && ACCEPTED_INPUT.include?(File.extname(file))
-                      
+                    if File.exist?(file) && PDFWeaver::ACCEPTED_INPUT.include?(File.extname(file))
                       @weaver_files << WeaverEngine::WeaverFile.new(true, File.basename(file), file)
                     else
                       msg_box_error("Unsupported file format!")
@@ -173,10 +174,12 @@ module PDFWeaver
                   @logger.info "Selected folder: #{selected_folder}"
                   unless selected_folder.nil?
                     if(Dir.exist?(selected_folder))
-                      search_pattern = ACCEPTED_INPUT.map{ |str| str.sub('.', '') }.join(',')
+                      search_pattern = PDFWeaver::ACCEPTED_INPUT.map{ |str| str.sub('.', '') }.join(',')
                       Dir.glob("#{selected_folder}/*.{#{search_pattern}}").each do |filepath|
                         @weaver_files << WeaverEngine::WeaverFile.new(true, File.basename(filepath), filepath)
                       end
+                    else
+                      msg_box_error("Selected folder: #{selected_folder} doesn't exist!")
                     end
                   end
                   $stdout.flush # for Windows
@@ -208,7 +211,7 @@ module PDFWeaver
                 }
           
                 editable false
-                cell_rows <=> [self, :weaver_files] # explicit data-binding to self.contacts Model Array, auto-inferring model attribute names from underscored table column names by convention
+                cell_rows <=> [self, :weaver_files] # explicit data-binding to self.weaver_files Model Array, auto-inferring model attribute names from underscored table column names by convention
                 
                 on_changed do |row, type, row_data|
                   $stdout.flush # for Windows
@@ -226,7 +229,6 @@ module PDFWeaver
                     @worker = Thread.new do
                       
                       status, missing_files = @weaver_engine.merge_files(@weaver_files, @output_file)
-
                       if missing_files.length > 0
                         @logger.info "Found #{missing_files.length} missing files"
                         Glimmer::LibUI.queue_main do
@@ -260,7 +262,14 @@ module PDFWeaver
   end
 end
 
+# This is a main class responsible for manipulations with files
+# 
+# Including:
+# - Merging files into a single pdf document
 class WeaverEngine
+
+  DEFAULT_PAGE_SIZE = "LETTER"
+  IMAGE_MARGIN = 80
 
   WeaverFile = Struct.new(:selected, :filename, :filepath) do
     def action
@@ -290,7 +299,8 @@ class WeaverEngine
     files_to_merge.select(&:selected).each do |weaver_file|
       if File.exist?(weaver_file.filepath)
         @logger.info "Merging #{weaver_file.filepath}"
-        pdf_output << CombinePDF.load(weaver_file.filepath)
+        pdf_input = process_file(weaver_file)
+        pdf_output << pdf_input
       else
         missing_files << weaver_file.filepath
       end
@@ -301,10 +311,34 @@ class WeaverEngine
 
     return status, missing_files
 
+    # TODO Implement proper exception handling
     rescue RuntimeError => e
       @logger.error("Exception occured during merge! #{e.message}")
       @logger.error("#{e.backtrace}")
-      return 1, []
+  end
+
+  private 
+  
+  def process_file(weaver_file)
+    extension = File.extname(weaver_file.filename)
+    if PDFWeaver::ACCEPTED_IMAGES.include?(extension)
+      process_image(weaver_file)
+    elsif PDFWeaver::ACCEPTED_FILES.include?(extension)
+      CombinePDF.load(weaver_file.filepath)
+    end
+
+  end
+
+  # Transforms image into a PDF file for further processing
+  # Uses *prawn* gem, currenlty only supports .png and .jpg (.jpeg) images
+  # The whole transformation happens in RAM without the need to save the file on disk
+  def process_image(weaver_file)
+    # TODO Implemet more advanced logic in transforming images -> pdf files based on the image dimension and other params
+    image_size = PDF::Core::PageGeometry::SIZES[DEFAULT_PAGE_SIZE].map{|e| e -= IMAGE_MARGIN}
+    pdf_from_image = Prawn::Document.new(page_size: DEFAULT_PAGE_SIZE)
+    pdf_from_image.image weaver_file.filepath, position: :center, vposition: :center, fit: image_size
+    image_in_pdf = pdf_from_image.render # Import PDF data from Prawn
+    CombinePDF.parse(image_in_pdf)
   end
 
 end
