@@ -9,6 +9,9 @@
 /test/tmp/
 /test/version_tmp/
 /tmp/
+/logs/
+/log/
+/.vscode/
 
 # Used by dotenv library to load environment variables.
 # .env

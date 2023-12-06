@@ -1,6 +1,6 @@
 # PDF Weaver - simple GUI to merge PDF files
 
-PDF Weaver is a simple, multi-platform tool to merge any PDF or image (coming soon) files into a singe document. User can choose the order of merging.
+PDF Weaver is a simple, multi-platform tool to merge any PDF or image files into a singe document. User can choose the order of merging.
 
 Stop trusting remote services with your sensitive files, use open-source, offline software to handle your PDF merging needs.
 
@@ -21,6 +21,9 @@ Then follow instructions on the screen.
 
 ### Mac
 ![mac screenshot](screenshots/pdf-weaver-mac.png)
+
+### Linux
+![mac screenshot](screenshots/pdf-weaver-linux.png)
 
 <!-- TODO -->
 <!-- | Windows | Mac | Linux |
