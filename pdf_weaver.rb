@@ -201,40 +201,7 @@ module PDFWeaver
                 stretchy false
                 
                 on_clicked do
-                  if not @running
-                    @running = true
-                    @merge_button.enabled = false
-                    @merge_button.text = "Merging..."
-                    @worker = Thread.new do
-                      if(@weaver_files.length > 0)
-                        status, missing_files = @weaver_engine.merge_files(@weaver_files, @output_file)
-                        if missing_files.length > 0
-                          @logger.info "Found #{missing_files.length} missing files"
-                          Glimmer::LibUI.queue_main do
-                            msg_box_error("Found #{missing_files.length} missing files!", "#{missing_files.join('\n')}")
-                          end
-                        end
-
-                        if status != 0
-                          @logger.info "Merge operation failed"
-                          Glimmer::LibUI.queue_main do
-                            msg_box_error("Merge operation failed with status: #{status}")
-                          end
-                        else 
-                          Glimmer::LibUI.queue_main do
-                            msg_box("Merge finished successfully!", "The result was saved to #{@output_file}")
-                          end
-                        end
-                      else
-                        Glimmer::LibUI.queue_main do
-                          msg_box("No files selected", "Merge is not possible")
-                        end
-                      end
-                      @running = false
-                    end
-                    @merge_button.enabled = true
-                    @merge_button.text = "Merge"
-                  end
+                  merge_operation
                 end
               }      
             }
@@ -257,6 +224,12 @@ module PDFWeaver
         menu_item('Select Folder') {
           on_clicked do
             select_folder_dialog
+          end
+        }
+
+        menu_item('Merge') {
+          on_clicked do
+            merge_operation
           end
         }
         
@@ -321,6 +294,43 @@ module PDFWeaver
         end
       end
       $stdout.flush # for Windows
+    end
+
+    def merge_operation
+      if not @running
+        @running = true
+        @merge_button.enabled = false
+        @merge_button.text = "Merging..."
+        @worker = Thread.new do
+          if(@weaver_files.length > 0)
+            status, missing_files = @weaver_engine.merge_files(@weaver_files, @output_file)
+            if missing_files.length > 0
+              @logger.info "Found #{missing_files.length} missing files"
+              Glimmer::LibUI.queue_main do
+                msg_box_error("Found #{missing_files.length} missing files!", "#{missing_files.join('\n')}")
+              end
+            end
+
+            if status != 0
+              @logger.info "Merge operation failed"
+              Glimmer::LibUI.queue_main do
+                msg_box_error("Merge operation failed with status: #{status}")
+              end
+            else 
+              Glimmer::LibUI.queue_main do
+                msg_box("Merge finished successfully!", "The result was saved to #{@output_file}")
+              end
+            end
+          else
+            Glimmer::LibUI.queue_main do
+              msg_box("No files selected", "Merge is not possible")
+            end
+          end
+          @running = false
+        end
+        @merge_button.enabled = true
+        @merge_button.text = "Merge"
+      end
     end
   end
 end
