@@ -111,6 +111,8 @@ module PDFWeaver
   
     def create_gui
       # TODO Add menu items
+      menu_options
+
       @main_window = window('PDF Weaver', 600, 600, true) {
         on_closing do
           @worker.exit if !@worker.nil?
@@ -153,36 +155,14 @@ module PDFWeaver
                 stretchy false
                 
                 on_clicked do
-                  file = open_file
-                  unless file.nil?
-                    @logger.info "Selected #{file}"
-                    if File.exist?(file) && PDFWeaver::ACCEPTED_INPUT.include?(File.extname(file))
-                      @weaver_files << WeaverEngine::WeaverFile.new(true, File.basename(file), file)
-                    else
-                      msg_box_error("Unsupported file format!")
-                    end
-                  end
-                  $stdout.flush # for Windows
-
+                  select_file_dialog
                 end
               }
               button("Select Folder") {
                 stretchy false
                 
                 on_clicked do
-                  selected_folder = open_folder
-                  @logger.info "Selected folder: #{selected_folder}"
-                  unless selected_folder.nil?
-                    if(Dir.exist?(selected_folder))
-                      search_pattern = PDFWeaver::ACCEPTED_INPUT.map{ |str| str.sub('.', '') }.join(',')
-                      Dir.glob("#{selected_folder}/*.{#{search_pattern}}").each do |filepath|
-                        @weaver_files << WeaverEngine::WeaverFile.new(true, File.basename(filepath), filepath)
-                      end
-                    else
-                      msg_box_error("Selected folder: #{selected_folder} doesn't exist!")
-                    end
-                  end
-                  $stdout.flush # for Windows
+                  select_folder_dialog
                 end
               }
             }
@@ -221,32 +201,35 @@ module PDFWeaver
                 stretchy false
                 
                 on_clicked do
-                  @logger.info "Merging..."
                   if not @running
                     @running = true
                     @merge_button.enabled = false
                     @merge_button.text = "Merging..."
                     @worker = Thread.new do
-                      
-                      status, missing_files = @weaver_engine.merge_files(@weaver_files, @output_file)
-                      if missing_files.length > 0
-                        @logger.info "Found #{missing_files.length} missing files"
+                      if(@weaver_files.length > 0)
+                        status, missing_files = @weaver_engine.merge_files(@weaver_files, @output_file)
+                        if missing_files.length > 0
+                          @logger.info "Found #{missing_files.length} missing files"
+                          Glimmer::LibUI.queue_main do
+                            msg_box_error("Found #{missing_files.length} missing files!", "#{missing_files.join('\n')}")
+                          end
+                        end
+
+                        if status != 0
+                          @logger.info "Merge operation failed"
+                          Glimmer::LibUI.queue_main do
+                            msg_box_error("Merge operation failed with status: #{status}")
+                          end
+                        else 
+                          Glimmer::LibUI.queue_main do
+                            msg_box("Merge finished successfully!", "The result was saved to #{@output_file}")
+                          end
+                        end
+                      else
                         Glimmer::LibUI.queue_main do
-                          msg_box_error("Found #{missing_files.length} missing files!", "#{missing_files.join('\n')}")
+                          msg_box("No files selected", "Merge is not possible")
                         end
                       end
-
-                      if status != 0
-                        @logger.info "Merge operation failed"
-                        Glimmer::LibUI.queue_main do
-                          msg_box_error("Merge operation failed with status: #{status}")
-                        end
-                      else 
-                        Glimmer::LibUI.queue_main do
-                          msg_box("Merge finished successfully!", "The result was saved to #{@output_file}")
-                        end
-                      end
-
                       @running = false
                     end
                     @merge_button.enabled = true
@@ -259,6 +242,86 @@ module PDFWeaver
         }
       }
     end
+
+    # Generating menu items
+    # Based on the official Glimmer DSL for LibUI examples
+    def menu_options
+      menu('File') {
+      
+        menu_item('Select File') {
+          on_clicked do
+            select_file_dialog
+          end
+        }
+
+        menu_item('Select Folder') {
+          on_clicked do
+            select_folder_dialog
+          end
+        }
+        
+        separator_menu_item
+        
+        menu_item('Exit') {
+          on_clicked do
+            exit(0)
+          end
+        }
+        
+        quit_menu_item if OS.mac?
+      }
+
+      menu('Help') {
+        if OS.mac?
+          about_menu_item {
+            on_clicked do
+              show_about_dialog
+            end
+          }
+        end
+      
+        menu_item('About') {
+          on_clicked do
+            show_about_dialog
+          end
+        }
+      }
+    end
+
+    def show_about_dialog
+      Glimmer::LibUI.queue_main do
+        msg_box('About PDF Weaver', "PDF Weaver - Simple GUI tool for all your PDF needs\nCopyright (c) 2023 Borys Komarov")
+      end
+    end
+
+    def select_file_dialog
+      file = open_file
+      unless file.nil?
+        @logger.info "Selected #{file}"
+        if File.exist?(file) && PDFWeaver::ACCEPTED_INPUT.include?(File.extname(file))
+          @weaver_files << WeaverEngine::WeaverFile.new(true, File.basename(file), file)
+        else
+          msg_box_error("Unsupported file format!")
+        end
+      end
+      $stdout.flush # for Windows
+    end
+
+    def select_folder_dialog
+      selected_folder = open_folder
+      @logger.info "Selected folder: #{selected_folder}"
+      unless selected_folder.nil?
+        if(Dir.exist?(selected_folder))
+          search_pattern = PDFWeaver::ACCEPTED_INPUT.map{ |str| str.sub('.', '') }.join(',')
+          Dir.glob("#{selected_folder}/*.{#{search_pattern}}").each do |filepath|
+            @weaver_files << WeaverEngine::WeaverFile.new(true, File.basename(filepath), filepath)
+          end
+        else
+          msg_box_error("Selected folder: #{selected_folder} doesn't exist!")
+        end
+      end
+      $stdout.flush # for Windows
+    end
   end
 end
 
@@ -266,6 +329,7 @@ end
 # 
 # Including:
 # - Merging files into a single pdf document
+# - Splitting files into separate pages - TODO
 class WeaverEngine
 
   DEFAULT_PAGE_SIZE = "LETTER"
@@ -331,13 +395,13 @@ class WeaverEngine
 
   # Transforms image into a PDF file for further processing
   # Uses *prawn* gem, currenlty only supports .png and .jpg (.jpeg) images
-  # The whole transformation happens in RAM without the need to save the file on disk
+  # The whole transformation happens in RAM without the need to save the temporary pdf file on disk
   def process_image(weaver_file)
     # TODO Implemet more advanced logic in transforming images -> pdf files based on the image dimension and other params
     image_size = PDF::Core::PageGeometry::SIZES[DEFAULT_PAGE_SIZE].map{|e| e -= IMAGE_MARGIN}
     pdf_from_image = Prawn::Document.new(page_size: DEFAULT_PAGE_SIZE)
     pdf_from_image.image weaver_file.filepath, position: :center, vposition: :center, fit: image_size
-    image_in_pdf = pdf_from_image.render # Import PDF data from Prawn
+    image_in_pdf = pdf_from_image.render
     CombinePDF.parse(image_in_pdf)
   end
 
