@@ -10,11 +10,7 @@ Built with Ruby and [Glimmer DSL for LibUI](https://github.com/AndyObtiva/glimme
 In order to install dependencies and run the program use:
 ```
 bundle install
-bundle exec ruby pdf_weaver.rb
-```
-Or if a proper ruby environment is in place you can just run:
-```
-./pdf_weaver.rb
+bin/pdf_weaver
 ```
 Then follow instructions on the screen.
 ## Screenshots
@@ -29,3 +25,9 @@ Then follow instructions on the screen.
 <!-- | Windows | Mac | Linux |
 |:---:|:-----:|:-------:|
 |![windows screenshot](screenshots/pdf-weaver-windows.png)|![mac screenshot](screenshots/pdf-weaver-mac.png)|![linux screenshot](screenshots/pdf-weaver-linux.png)| -->
+
+Copyright
+---------
+
+Copyright (c) 2024 Borys Komarov. See
+LICENSE.txt for further details.
