@@ -34,20 +34,20 @@ class PdfWeaver
           "Arrange Order: Rearrange files using 'Up' and 'Down' buttons.",
           "Merge: Hit 'Merge' to combine files into one document.",
           "Retrieve Result: Find the merged file in the chosen output path."]
-
-          menu_options
       end
   
       ## Use after_body block to setup observers for controls in body
       #
       # after_body do
-      #
+      #   menu_options
       # end
   
       ## Add control content inside custom window body
       ## Top-most control must be a window or another custom window
       #
       body {
+        menu_options
+
         @main_window = window('PDF Weaver', 600, 600, true) {
           on_closing do
             @worker.exit if !@worker.nil?
@@ -100,6 +100,14 @@ class PdfWeaver
                     select_folder_dialog
                   end
                 }
+
+                button("Clear List") {
+                  stretchy false
+                  
+                  on_clicked do
+                    clear_operation
+                  end
+                }    
               }
             }
             horizontal_box {
@@ -138,7 +146,7 @@ class PdfWeaver
                   on_clicked do
                     merge_operation
                   end
-                }      
+                }
               }
             }
           }
@@ -313,7 +321,7 @@ class PdfWeaver
   
       def show_about_dialog
         Glimmer::LibUI.queue_main do
-          msg_box('About PDF Weaver', "PDF Weaver - Simple GUI tool for all your PDF needs\nCopyright (c) 2023 Borys Komarov")
+          msg_box('About PDF Weaver', "PDF Weaver - Simple GUI tool for your PDF merging needs\nCopyright (c) 2024 Borys Komarov")
         end
       end
   
@@ -346,6 +354,10 @@ class PdfWeaver
         $stdout.flush # for Windows
       end
   
+      def clear_operation
+        @weaver_files.clear
+      end
+
       def merge_operation
         if not @running
           @running = true

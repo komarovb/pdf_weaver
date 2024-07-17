@@ -1,8 +1,7 @@
-# This is a main class responsible for manipulations with files
-# 
-# Including:
-# - Merging files into a single pdf document
-# - Splitting files into separate pages - TODO
+require 'combine_pdf'
+require 'prawn'
+
+# This is a main class responsible for merging files into a single pdf document
 class WeaverEngine
 
   DEFAULT_PAGE_SIZE = "LETTER"
