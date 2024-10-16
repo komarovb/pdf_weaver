@@ -13,6 +13,12 @@ bundle install
 bin/pdf_weaver
 ```
 Then follow instructions on the screen.
+
+## Running the tests
+```
+bundle exec rspec spec/*
+```
+
 ## Screenshots
 
 ### Mac
